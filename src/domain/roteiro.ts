@@ -3,24 +3,24 @@ import { prazoAindaVale } from "./prazo.ts";
 
 export type StatusRoteiro = "aguardando_marca" | "alteracao_pedida" | "aprovado";
 
-export type Versao = {
+export type Versao = Readonly<{
   numero: number;
   conteudo: string;
   criadaEm: string;
-};
+}>;
 
-export type PedidoAlteracao = {
+export type PedidoAlteracao = Readonly<{
   motivo: string;
   prazo: string;
   solicitadoEm: string;
-};
+}>;
 
-export type Roteiro = {
+export type Roteiro = Readonly<{
   id: string;
   status: StatusRoteiro;
-  versoes: Versao[];
+  versoes: readonly Versao[];
   pedidoAlteracao: PedidoAlteracao | null;
-};
+}>;
 
 export function criarRoteiro(id: string, conteudo: string, agora: Date): Roteiro {
   return {
@@ -53,7 +53,7 @@ export function pedirAlteracao(
   return {
     id: roteiro.id,
     status: "alteracao_pedida",
-    versoes: copiarVersoes(roteiro.versoes),
+    versoes: roteiro.versoes,
     pedidoAlteracao: {
       motivo,
       prazo,
@@ -72,15 +72,10 @@ export function enviarVersao(roteiro: Roteiro, conteudo: string, agora: Date): R
     );
   }
 
-  const proximoNumero = roteiro.versoes.reduce(
-    (maior, versao) => Math.max(maior, versao.numero),
-    0,
-  );
-
   return {
     id: roteiro.id,
     status: "aguardando_marca",
-    versoes: [...copiarVersoes(roteiro.versoes), montarVersao(proximoNumero + 1, texto, agora)],
+    versoes: [...roteiro.versoes, montarVersao(roteiro.versoes.length + 1, texto, agora)],
     pedidoAlteracao: null,
   };
 }
@@ -91,7 +86,7 @@ export function aprovar(roteiro: Roteiro): Roteiro {
       return {
         id: roteiro.id,
         status: "aprovado",
-        versoes: copiarVersoes(roteiro.versoes),
+        versoes: roteiro.versoes,
         pedidoAlteracao: null,
       };
     case "alteracao_pedida":
@@ -120,8 +115,4 @@ function textoObrigatorio(valor: string, mensagem: string): string {
     throw new ErroDeRoteiro("requisicao_invalida", mensagem);
   }
   return valor.trim();
-}
-
-function copiarVersoes(versoes: Versao[]): Versao[] {
-  return versoes.map((versao) => ({ ...versao }));
 }
