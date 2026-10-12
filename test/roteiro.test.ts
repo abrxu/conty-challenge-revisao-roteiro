@@ -649,4 +649,39 @@ describe("revisão de roteiro", () => {
     expect(atual.status).toBe("alteracao_pedida");
     expect(atual.pedidoAlteracao).not.toBeNull();
   });
+
+  it("JSON mal formado responde 400 no mesmo formato { erro } das regras", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const resposta = await app.inject({
+      method: "POST",
+      url: "/roteiros",
+      headers: { "content-type": "application/json" },
+      payload: '{"conteudo":',
+    });
+    expect(resposta.statusCode).toBe(400);
+    expect(Object.keys(resposta.json() as object)).toEqual(["erro"]);
+  });
+
+  it("erro inesperado responde 500 sem vazar a mensagem interna", async () => {
+    const app = await buildApp({
+      clock: relogioFixo(INSTANTE_ANTES_DO_FIM),
+      repositorio: {
+        salvar() {
+          throw new Error("disco cheio em /var/lib/roteiros");
+        },
+        buscar() {
+          return undefined;
+        },
+      },
+    });
+    apps.push(app);
+
+    const resposta = await app.inject({
+      method: "POST",
+      url: "/roteiros",
+      payload: { conteudo: CONTEUDO_V1 },
+    });
+    expect(resposta.statusCode).toBe(500);
+    expect(resposta.json()).toEqual({ erro: "Erro interno." });
+  });
 });
