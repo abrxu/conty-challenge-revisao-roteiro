@@ -40,7 +40,7 @@ curl -s -X POST http://localhost:3000/roteiros \
 }
 ```
 
-Pedir alteração. `prazo` é um dia `YYYY-MM-DD` no fuso da marca (`America/Sao_Paulo`). O último instante desse dia ainda vale. Os exemplos supõem o relógio em `2026-10-11T15:00:00Z`; com o relógio real, um prazo que já passou responde 422, então ao testar use uma data de hoje em diante.
+Pedir alteração. `prazo` é um dia `YYYY-MM-DD` no fuso da marca (`America/Sao_Paulo`). O último instante desse dia ainda vale. Os exemplos supõem o relógio em `2026-10-11T15:00:00Z` (e `18:30` na versão 2); com o relógio real, um prazo que já passou responde 422, então ao testar use uma data de hoje em diante.
 
 ```bash
 curl -s -X POST http://localhost:3000/roteiros/7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6f14/pedidos-alteracao \
@@ -88,7 +88,7 @@ curl -s -X POST http://localhost:3000/roteiros/7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6
     {
       "numero": 2,
       "conteudo": "Abre com o produto na mão, em close.",
-      "criadaEm": "2026-10-11T15:00:00.000Z"
+      "criadaEm": "2026-10-11T18:30:00.000Z"
     }
   ],
   "pedidoAlteracao": null
@@ -114,7 +114,7 @@ curl -s -X POST http://localhost:3000/roteiros/7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6
     {
       "numero": 2,
       "conteudo": "Abre com o produto na mão, em close.",
-      "criadaEm": "2026-10-11T15:00:00.000Z"
+      "criadaEm": "2026-10-11T18:30:00.000Z"
     }
   ],
   "pedidoAlteracao": null
@@ -146,6 +146,8 @@ Pedido sem motivo ou sem prazo responde 400. Prazo que já passou responde 422. 
 - O relógio entra por injeção (`Clock`). O domínio não chama `Date.now()`.
 - Cada resposta devolve o roteiro inteiro (`status`, `versoes`, `pedidoAlteracao`) para o próximo passo não depender de memória de chat.
 - Ao enviar a nova versão, o pedido aberto sai do campo `pedidoAlteracao`. As versões anteriores permanecem.
+- O formato da requisição (campos obrigatórios, texto, dia `YYYY-MM-DD` que existe) é checado pelo schema das rotas no Fastify, sem coerção de tipos: `{"conteudo": 123}` responde 400. O domínio fica com as regras: motivo não vazio, prazo vencido e estado.
+- Todo erro sai como `{ "erro": "..." }`. As regras respondem em português; as mensagens de validação do schema saem como o Ajv as gera, em inglês. Erro inesperado responde 500 com `"Erro interno."`, sem detalhes.
 
 ## O que ficou de fora
 
