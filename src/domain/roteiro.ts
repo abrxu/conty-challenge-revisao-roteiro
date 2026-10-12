@@ -1,6 +1,6 @@
-import type { Clock } from "../clock.js";
-import { ErroDeRoteiro } from "./erros.js";
-import { prazoAindaVale, prazoCalendario } from "./prazo.js";
+import type { Clock } from "../clock.ts";
+import { ErroDeRoteiro } from "./erros.ts";
+import { prazoAindaVale, prazoCalendario } from "./prazo.ts";
 
 export type StatusRoteiro = "aguardando_marca" | "alteracao_pedida" | "aprovado";
 
@@ -127,10 +127,13 @@ export type RepositorioRoteiros = {
 };
 
 export class ServicoRoteiro {
-  constructor(
-    private readonly repositorio: RepositorioRoteiros,
-    private readonly clock: Clock,
-  ) {}
+  private readonly repositorio: RepositorioRoteiros;
+  private readonly clock: Clock;
+
+  constructor(repositorio: RepositorioRoteiros, clock: Clock) {
+    this.repositorio = repositorio;
+    this.clock = clock;
+  }
 
   criar(conteudo: unknown): Roteiro {
     const roteiro = criarRoteiro(crypto.randomUUID(), conteudo, this.clock.now());

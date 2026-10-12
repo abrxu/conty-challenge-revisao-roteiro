@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { buildApp } from "../src/app.js";
+import { buildApp } from "../src/app.ts";
 
 type StatusRoteiro = "aguardando_marca" | "alteracao_pedida" | "aprovado";
 
@@ -194,6 +194,62 @@ describe("revisão de roteiro", () => {
     expect(atual.status).toBe("aguardando_marca");
     expect(atual.pedidoAlteracao).toBeNull();
     expect(atual.versoes).toHaveLength(1);
+  });
+
+  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou." no salto do relógio', async () => {
+    const ultimoAntesDeAdiantar = "2018-11-04T02:59:59.999Z";
+    const primeiroDepoisDeAdiantar = "2018-11-04T03:00:00.000Z";
+    const diaQueAdianta = "2018-11-03";
+
+    const antes = await abrirApp(ultimoAntesDeAdiantar);
+    const roteiroAntes = await criarRoteiro(antes);
+    const pedidoAntes = await antes.inject({
+      method: "POST",
+      url: `/roteiros/${roteiroAntes.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: diaQueAdianta },
+    });
+    expect(pedidoAntes.statusCode).toBe(201);
+    expect((pedidoAntes.json() as Roteiro).pedidoAlteracao).toEqual({
+      motivo: MOTIVO,
+      prazo: diaQueAdianta,
+      solicitadoEm: ultimoAntesDeAdiantar,
+    });
+
+    const depois = await abrirApp(primeiroDepoisDeAdiantar);
+    const roteiroDepois = await criarRoteiro(depois);
+    const pedidoDepois = await depois.inject({
+      method: "POST",
+      url: `/roteiros/${roteiroDepois.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: diaQueAdianta },
+    });
+    expect(pedidoDepois.statusCode).toBe(422);
+    expect((await lerRoteiro(depois, roteiroDepois.id)).status).toBe("aguardando_marca");
+
+    const ultimoAntesDeAtrasar = "2019-02-17T02:59:59.999Z";
+    const primeiroDepoisDeAtrasar = "2019-02-17T03:00:00.000Z";
+    const diaQueAtrasa = "2019-02-16";
+
+    const aindaNoDia = await abrirApp(ultimoAntesDeAtrasar);
+    const roteiroAinda = await criarRoteiro(aindaNoDia);
+    const pedidoAinda = await aindaNoDia.inject({
+      method: "POST",
+      url: `/roteiros/${roteiroAinda.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: diaQueAtrasa },
+    });
+    expect(pedidoAinda.statusCode).toBe(201);
+    expect((pedidoAinda.json() as Roteiro).pedidoAlteracao?.solicitadoEm).toBe(
+      ultimoAntesDeAtrasar,
+    );
+
+    const diaSeguinte = await abrirApp(primeiroDepoisDeAtrasar);
+    const roteiroSeguinte = await criarRoteiro(diaSeguinte);
+    const pedidoSeguinte = await diaSeguinte.inject({
+      method: "POST",
+      url: `/roteiros/${roteiroSeguinte.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: diaQueAtrasa },
+    });
+    expect(pedidoSeguinte.statusCode).toBe(422);
+    expect((await lerRoteiro(diaSeguinte, roteiroSeguinte.id)).pedidoAlteracao).toBeNull();
   });
 
   it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou."', async () => {

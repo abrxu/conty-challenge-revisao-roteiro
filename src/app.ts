@@ -1,8 +1,8 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
-import type { Clock } from "./clock.js";
-import { ErroDeRoteiro, type CodigoErro } from "./domain/erros.js";
-import { ServicoRoteiro } from "./domain/roteiro.js";
-import { RepositorioMemoria } from "./repositorio-memoria.js";
+import type { Clock } from "./clock.ts";
+import { ErroDeRoteiro, type CodigoErro } from "./domain/erros.ts";
+import { ServicoRoteiro } from "./domain/roteiro.ts";
+import { RepositorioMemoria } from "./repositorio-memoria.ts";
 
 export async function buildApp(deps: { clock: Clock }) {
   const app = Fastify({ logger: false });
