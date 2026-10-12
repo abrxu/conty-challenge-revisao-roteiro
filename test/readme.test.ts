@@ -2,9 +2,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const PLACEHOLDER_USO_DE_IA =
-  "<!-- PREENCHER: o que foi feito com IA e o que revisei -->";
-
 function lerReadme(): string {
   return readFileSync(path.join(process.cwd(), "README.md"), "utf8");
 }
@@ -20,8 +17,12 @@ describe("README", () => {
     expect(fora).toContain("autenticação");
     expect(fora).toContain("persistência");
     expect(readme).not.toContain("nada ficou de fora");
-    expect(readme).toContain("Uso de IA");
-    expect(readme).toContain(PLACEHOLDER_USO_DE_IA);
+  });
+
+  it('entrega: "Declarar o que foi feito com IA e o que foi revisado."', () => {
+    const readme = lerReadme();
+
+    expect(readme.indexOf("## Uso de IA")).toBeGreaterThan(-1);
   });
 
   it('entrega: "Exemplos de request e response."', () => {
