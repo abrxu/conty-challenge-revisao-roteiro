@@ -196,7 +196,7 @@ describe("revisão de roteiro", () => {
     expect(atual.versoes).toHaveLength(1);
   });
 
-  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou." no salto do relógio', async () => {
+  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou." no início e no fim do horário de verão', async () => {
     const ultimoAntesDeAdiantar = "2018-11-04T02:59:59.999Z";
     const primeiroDepoisDeAdiantar = "2018-11-04T03:00:00.000Z";
     const diaQueAdianta = "2018-11-03";
@@ -252,7 +252,7 @@ describe("revisão de roteiro", () => {
     expect((await lerRoteiro(diaSeguinte, roteiroSeguinte.id)).pedidoAlteracao).toBeNull();
   });
 
-  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou." com horário de verão', async () => {
+  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou." durante o horário de verão (UTC-2)', async () => {
     // 2018-12-10T02:30Z é 10/12 às 00:30 em São Paulo (UTC-2). Um fuso fixo de -03:00 leria 09/12.
     const app = await abrirApp("2018-12-10T02:30:00.000Z");
     const roteiro = await criarRoteiro(app);
@@ -272,7 +272,7 @@ describe("revisão de roteiro", () => {
     expect(deHoje.statusCode).toBe(201);
   });
 
-  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou."', async () => {
+  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou." às 23h em São Paulo, já dia seguinte em UTC', async () => {
     const instante = "2026-10-12T02:00:00.000Z";
     const app = await abrirApp(instante);
     const roteiro = await criarRoteiro(app);
@@ -410,7 +410,7 @@ describe("revisão de roteiro", () => {
     expect(atual.pedidoAlteracao).toBeNull();
   });
 
-  it('entrega: "Pedido de alteração com prazo que já passou não vale."', async () => {
+  it('regra: "Pedido de alteração com prazo que já passou não vale."', async () => {
     const app = await abrirApp("2026-10-12T03:00:00.001Z");
     const roteiro = await criarRoteiro(app);
 
@@ -427,7 +427,7 @@ describe("revisão de roteiro", () => {
     expect(atual.versoes).toHaveLength(1);
   });
 
-  it('entrega: "Aprovar encerra a revisão, e a aprovação não reabre."', async () => {
+  it('regra: "Aprovar encerra a revisão, e a aprovação não reabre."', async () => {
     const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
     const roteiro = await criarRoteiro(app);
 
@@ -494,7 +494,7 @@ describe("revisão de roteiro", () => {
     expect(atual.pedidoAlteracao).toBeNull();
   });
 
-  it('critério: "Pedido de alteração sem motivo ou sem prazo não passa." com data que não existe', async () => {
+  it("prazo com data que não existe no calendário responde 400 e o estado não muda", async () => {
     const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
     const roteiro = await criarRoteiro(app);
 
