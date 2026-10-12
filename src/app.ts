@@ -31,9 +31,10 @@ export async function buildApp(deps: {
   clock: Clock;
   repositorio?: RepositorioRoteiros;
   gerarId?: () => string;
+  logger?: boolean;
 }) {
   // Sem coerção: o default do Fastify transformaria {"conteudo": 123} em "123".
-  const app = Fastify({ logger: false, ajv: { customOptions: { coerceTypes: false } } });
+  const app = Fastify({ logger: deps.logger ?? false, ajv: { customOptions: { coerceTypes: false } } });
   const servico = new ServicoRoteiro(
     deps.repositorio ?? new RepositorioMemoria(),
     deps.clock,

@@ -2,6 +2,7 @@ import { buildApp } from "./app.ts";
 
 const porta = Number(process.env.PORT ?? 3000);
 const app = await buildApp({
+  logger: true,
   clock: {
     now: () => new Date(),
   },
