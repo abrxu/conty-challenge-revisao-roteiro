@@ -1,4 +1,5 @@
-import type { RepositorioRoteiros, Roteiro } from "./domain/roteiro.ts";
+import type { Roteiro } from "./domain/roteiro.ts";
+import type { RepositorioRoteiros } from "./servico-roteiro.ts";
 
 export class RepositorioMemoria implements RepositorioRoteiros {
   private readonly roteiros = new Map<string, Roteiro>();

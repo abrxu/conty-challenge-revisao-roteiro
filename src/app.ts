@@ -1,7 +1,7 @@
 import Fastify, { type FastifyError } from "fastify";
 import type { Clock } from "./clock.ts";
 import { ErroDeRoteiro, type CodigoErro } from "./domain/erros.ts";
-import { ServicoRoteiro, type RepositorioRoteiros } from "./domain/roteiro.ts";
+import { ServicoRoteiro, type RepositorioRoteiros } from "./servico-roteiro.ts";
 import { RepositorioMemoria } from "./repositorio-memoria.ts";
 
 type ComId = { Params: { id: string } };
@@ -27,10 +27,18 @@ const corpoPedido = {
   },
 } as const;
 
-export async function buildApp(deps: { clock: Clock; repositorio?: RepositorioRoteiros }) {
+export async function buildApp(deps: {
+  clock: Clock;
+  repositorio?: RepositorioRoteiros;
+  gerarId?: () => string;
+}) {
   // Sem coerção: o default do Fastify transformaria {"conteudo": 123} em "123".
   const app = Fastify({ logger: false, ajv: { customOptions: { coerceTypes: false } } });
-  const servico = new ServicoRoteiro(deps.repositorio ?? new RepositorioMemoria(), deps.clock);
+  const servico = new ServicoRoteiro(
+    deps.repositorio ?? new RepositorioMemoria(),
+    deps.clock,
+    deps.gerarId ?? (() => crypto.randomUUID()),
+  );
 
   app.setErrorHandler<FastifyError>((erro, _request, reply) => {
     if (erro instanceof ErroDeRoteiro) {

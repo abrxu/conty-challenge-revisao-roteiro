@@ -724,4 +724,16 @@ describe("revisão de roteiro", () => {
     });
     expect(pedido.statusCode).toBe(400);
   });
+
+  it("o id do roteiro vem do gerador injetado", async () => {
+    const app = await buildApp({
+      clock: relogioFixo(INSTANTE_ANTES_DO_FIM),
+      gerarId: () => "roteiro-1",
+    });
+    apps.push(app);
+
+    const roteiro = await criarRoteiro(app);
+    expect(roteiro.id).toBe("roteiro-1");
+    expect((await lerRoteiro(app, "roteiro-1")).versoes).toHaveLength(1);
+  });
 });

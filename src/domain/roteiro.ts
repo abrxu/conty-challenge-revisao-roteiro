@@ -1,4 +1,3 @@
-import type { Clock } from "../clock.ts";
 import { ErroDeRoteiro } from "./erros.ts";
 import { prazoAindaVale } from "./prazo.ts";
 
@@ -125,58 +124,4 @@ function textoObrigatorio(valor: string, mensagem: string): string {
 
 function copiarVersoes(versoes: Versao[]): Versao[] {
   return versoes.map((versao) => ({ ...versao }));
-}
-
-export type RepositorioRoteiros = {
-  salvar(roteiro: Roteiro): void;
-  buscar(id: string): Roteiro | undefined;
-};
-
-export class ServicoRoteiro {
-  private readonly repositorio: RepositorioRoteiros;
-  private readonly clock: Clock;
-
-  constructor(repositorio: RepositorioRoteiros, clock: Clock) {
-    this.repositorio = repositorio;
-    this.clock = clock;
-  }
-
-  criar(conteudo: string): Roteiro {
-    const roteiro = criarRoteiro(crypto.randomUUID(), conteudo, this.clock.now());
-    this.repositorio.salvar(roteiro);
-    return roteiro;
-  }
-
-  buscar(id: string): Roteiro {
-    return this.exigir(id);
-  }
-
-  pedirAlteracao(id: string, entrada: { motivo: string; prazo: string }): Roteiro {
-    const atual = this.exigir(id);
-    const revisado = pedirAlteracao(atual, entrada, this.clock.now());
-    this.repositorio.salvar(revisado);
-    return revisado;
-  }
-
-  enviarVersao(id: string, conteudo: string): Roteiro {
-    const atual = this.exigir(id);
-    const revisado = enviarVersao(atual, conteudo, this.clock.now());
-    this.repositorio.salvar(revisado);
-    return revisado;
-  }
-
-  aprovar(id: string): Roteiro {
-    const atual = this.exigir(id);
-    const revisado = aprovar(atual);
-    this.repositorio.salvar(revisado);
-    return revisado;
-  }
-
-  private exigir(id: string): Roteiro {
-    const roteiro = this.repositorio.buscar(id);
-    if (!roteiro) {
-      throw new ErroDeRoteiro("nao_encontrado", "Roteiro não encontrado.");
-    }
-    return roteiro;
-  }
 }
