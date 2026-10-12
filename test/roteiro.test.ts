@@ -407,6 +407,9 @@ describe("revisão de roteiro", () => {
       url: `/roteiros/${roteiro.id}/aprovacao`,
     });
     expect(segunda.statusCode).toBe(409);
+    expect(segunda.json()).toEqual({
+      erro: "A aprovação encerra a revisão e não reabre.",
+    });
 
     const atual = await lerRoteiro(app, roteiro.id);
     expect(atual.status).toBe("aprovado");
@@ -548,6 +551,9 @@ describe("revisão de roteiro", () => {
       url: `/roteiros/${roteiro.id}/aprovacao`,
     });
     expect(aprovacao.statusCode).toBe(409);
+    expect(aprovacao.json()).toEqual({
+      erro: "Há um pedido de alteração aberto. Envie a nova versão antes de aprovar.",
+    });
 
     const atual = await lerRoteiro(app, roteiro.id);
     expect(atual.status).toBe("alteracao_pedida");

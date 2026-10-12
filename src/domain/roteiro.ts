@@ -87,19 +87,25 @@ export function enviarVersao(roteiro: Roteiro, conteudo: unknown, agora: Date): 
 }
 
 export function aprovar(roteiro: Roteiro): Roteiro {
-  if (roteiro.status !== "aguardando_marca") {
-    throw new ErroDeRoteiro(
-      "conflito",
-      "A aprovação encerra a revisão e não reabre.",
-    );
+  switch (roteiro.status) {
+    case "aguardando_marca":
+      return {
+        id: roteiro.id,
+        status: "aprovado",
+        versoes: copiarVersoes(roteiro.versoes),
+        pedidoAlteracao: null,
+      };
+    case "alteracao_pedida":
+      throw new ErroDeRoteiro(
+        "conflito",
+        "Há um pedido de alteração aberto. Envie a nova versão antes de aprovar.",
+      );
+    case "aprovado":
+      throw new ErroDeRoteiro(
+        "conflito",
+        "A aprovação encerra a revisão e não reabre.",
+      );
   }
-
-  return {
-    id: roteiro.id,
-    status: "aprovado",
-    versoes: copiarVersoes(roteiro.versoes),
-    pedidoAlteracao: null,
-  };
 }
 
 function montarVersao(numero: number, conteudo: unknown, agora: Date): Versao {
