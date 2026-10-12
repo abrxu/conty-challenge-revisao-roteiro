@@ -75,10 +75,50 @@ curl -s -X POST http://localhost:3000/roteiros/7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6
   -d '{"conteudo":"Abre com o produto na mão, em close."}'
 ```
 
+```json
+{
+  "id": "7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6f14",
+  "status": "aguardando_marca",
+  "versoes": [
+    {
+      "numero": 1,
+      "conteudo": "Abre com o produto na mesa.",
+      "criadaEm": "2026-10-11T15:00:00.000Z"
+    },
+    {
+      "numero": 2,
+      "conteudo": "Abre com o produto na mão, em close.",
+      "criadaEm": "2026-10-11T15:00:00.000Z"
+    }
+  ],
+  "pedidoAlteracao": null
+}
+```
+
 Aprovar. O status fica `aprovado` e um segundo pedido de aprovação responde 409.
 
 ```bash
 curl -s -X POST http://localhost:3000/roteiros/7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6f14/aprovacao
+```
+
+```json
+{
+  "id": "7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6f14",
+  "status": "aprovado",
+  "versoes": [
+    {
+      "numero": 1,
+      "conteudo": "Abre com o produto na mesa.",
+      "criadaEm": "2026-10-11T15:00:00.000Z"
+    },
+    {
+      "numero": 2,
+      "conteudo": "Abre com o produto na mão, em close.",
+      "criadaEm": "2026-10-11T15:00:00.000Z"
+    }
+  ],
+  "pedidoAlteracao": null
+}
 ```
 
 Consultar o estado atual, incluindo todas as versões:
@@ -99,7 +139,8 @@ Pedido sem motivo ou sem prazo responde 400. Prazo que já passou responde 422. 
 
 ## Decisões
 
-- O prazo é o dia civil em `America/Sao_Paulo`. Vale enquanto o relógio está antes das 00:00 do dia seguinte nesse fuso, então 23:59:59.999 ainda passa e 00:00:00.000 do dia seguinte não. A comparação não usa a data UTC.
+- O prazo é um dia civil em `America/Sao_Paulo`. O pedido vale quando a data local nesse fuso ainda é o dia do prazo. Em um dia comum, 23:59:59.999 passa e 00:00:00.000 do dia seguinte não passa. Se o relógio adianta ou atrasa, vale o dia que o fuso mostra, e não a data em UTC.
+- O prazo trava só o pedido de alteração. Com o pedido já aberto, a versão nova entra mesmo depois desse dia.
 - O relógio entra por injeção (`Clock`). O domínio não chama `Date.now()`.
 - Cada resposta devolve o roteiro inteiro (`status`, `versoes`, `pedidoAlteracao`) para o próximo passo não depender de memória de chat.
 - Ao enviar a nova versão, o pedido aberto sai do campo `pedidoAlteracao`. As versões anteriores permanecem.
