@@ -1,0 +1,500 @@
+import { afterEach, describe, expect, it } from "vitest";
+import type { FastifyInstance } from "fastify";
+import { buildApp } from "../src/app.js";
+
+type StatusRoteiro = "aguardando_marca" | "alteracao_pedida" | "aprovado";
+
+type Versao = {
+  numero: number;
+  conteudo: string;
+  criadaEm: string;
+};
+
+type PedidoAlteracao = {
+  motivo: string;
+  prazo: string;
+  solicitadoEm: string;
+};
+
+type Roteiro = {
+  id: string;
+  status: StatusRoteiro;
+  versoes: Versao[];
+  pedidoAlteracao: PedidoAlteracao | null;
+};
+
+const CONTEUDO_V1 = "Abre com o produto na mesa.";
+const CONTEUDO_V2 = "Abre com o produto na mão, em close.";
+const MOTIVO = "O gancho não mostra o produto.";
+const INSTANTE_ANTES_DO_FIM = "2026-10-11T15:00:00.000Z";
+const PRAZO_NO_DIA = "2026-10-11";
+
+const apps: FastifyInstance[] = [];
+
+function relogioFixo(iso: string): { now(): Date } {
+  const instante = new Date(iso);
+  return {
+    now() {
+      return new Date(instante.getTime());
+    },
+  };
+}
+
+async function abrirApp(iso: string): Promise<FastifyInstance> {
+  const app = (await buildApp({ clock: relogioFixo(iso) })) as FastifyInstance;
+  apps.push(app);
+  return app;
+}
+
+afterEach(async () => {
+  while (apps.length > 0) {
+    const app = apps.pop();
+    if (app) {
+      await app.close();
+    }
+  }
+});
+
+async function criarRoteiro(
+  app: FastifyInstance,
+  conteudo: string = CONTEUDO_V1,
+): Promise<Roteiro> {
+  const resposta = await app.inject({
+    method: "POST",
+    url: "/roteiros",
+    payload: { conteudo },
+  });
+  expect(resposta.statusCode).toBe(201);
+  return resposta.json() as Roteiro;
+}
+
+async function lerRoteiro(app: FastifyInstance, id: string): Promise<Roteiro> {
+  const resposta = await app.inject({
+    method: "GET",
+    url: `/roteiros/${id}`,
+  });
+  expect(resposta.statusCode).toBe(200);
+  return resposta.json() as Roteiro;
+}
+
+describe("revisão de roteiro", () => {
+  it('critério: "Dá para seguir o fluxo inteiro sem adivinhar o estado."', async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+
+    const criado = await app.inject({
+      method: "POST",
+      url: "/roteiros",
+      payload: { conteudo: CONTEUDO_V1 },
+    });
+    expect(criado.statusCode).toBe(201);
+    const roteiro = criado.json() as Roteiro;
+    expect(roteiro.id).toEqual(expect.any(String));
+    expect(roteiro.id.length).toBeGreaterThan(0);
+    expect(roteiro).toEqual({
+      id: roteiro.id,
+      status: "aguardando_marca",
+      versoes: [
+        {
+          numero: 1,
+          conteudo: CONTEUDO_V1,
+          criadaEm: INSTANTE_ANTES_DO_FIM,
+        },
+      ],
+      pedidoAlteracao: null,
+    });
+
+    expect(await lerRoteiro(app, roteiro.id)).toEqual(roteiro);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+    expect(pedido.statusCode).toBe(201);
+    const comPedido = pedido.json() as Roteiro;
+    expect(comPedido.status).toBe("alteracao_pedida");
+    expect(comPedido.pedidoAlteracao).toEqual({
+      motivo: MOTIVO,
+      prazo: PRAZO_NO_DIA,
+      solicitadoEm: INSTANTE_ANTES_DO_FIM,
+    });
+    expect(await lerRoteiro(app, roteiro.id)).toEqual(comPedido);
+
+    const novaVersao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/versoes`,
+      payload: { conteudo: CONTEUDO_V2 },
+    });
+    expect(novaVersao.statusCode).toBe(201);
+    const revisado = novaVersao.json() as Roteiro;
+    expect(revisado.status).toBe("aguardando_marca");
+    expect(revisado.pedidoAlteracao).toBeNull();
+    expect(revisado.versoes).toEqual([
+      {
+        numero: 1,
+        conteudo: CONTEUDO_V1,
+        criadaEm: INSTANTE_ANTES_DO_FIM,
+      },
+      {
+        numero: 2,
+        conteudo: CONTEUDO_V2,
+        criadaEm: INSTANTE_ANTES_DO_FIM,
+      },
+    ]);
+
+    const aposVersao = await lerRoteiro(app, roteiro.id);
+    expect(aposVersao.status).toBe("aguardando_marca");
+    expect(aposVersao.pedidoAlteracao).toBeNull();
+    expect(aposVersao.versoes).toHaveLength(2);
+
+    const aprovacao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/aprovacao`,
+    });
+    expect(aprovacao.statusCode).toBe(200);
+    expect((aprovacao.json() as Roteiro).status).toBe("aprovado");
+
+    const aprovado = await lerRoteiro(app, roteiro.id);
+    expect(aprovado.status).toBe("aprovado");
+  });
+
+  it('critério: "Pedido de alteração sem motivo ou sem prazo não passa."', async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const semMotivo = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { prazo: PRAZO_NO_DIA },
+    });
+    expect(semMotivo.statusCode).toBe(400);
+
+    const semPrazo = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO },
+    });
+    expect(semPrazo.statusCode).toBe(400);
+
+    const motivoVazio = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: "", prazo: PRAZO_NO_DIA },
+    });
+    expect(motivoVazio.statusCode).toBe(400);
+
+    const motivoSoEspacos = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: "   ", prazo: PRAZO_NO_DIA },
+    });
+    expect(motivoSoEspacos.statusCode).toBe(400);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aguardando_marca");
+    expect(atual.pedidoAlteracao).toBeNull();
+    expect(atual.versoes).toHaveLength(1);
+  });
+
+  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou."', async () => {
+    const instante = "2026-10-12T02:00:00.000Z";
+    const app = await abrirApp(instante);
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+
+    expect(pedido.statusCode).toBe(201);
+    const corpo = pedido.json() as Roteiro;
+    expect(corpo.status).toBe("alteracao_pedida");
+    expect(corpo.pedidoAlteracao).toEqual({
+      motivo: MOTIVO,
+      prazo: PRAZO_NO_DIA,
+      solicitadoEm: instante,
+    });
+  });
+
+  it('critério: "Roteiro aprovado não aceita nova versão nem novo pedido de alteração."', async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const aprovacao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/aprovacao`,
+    });
+    expect(aprovacao.statusCode).toBe(200);
+
+    const versao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/versoes`,
+      payload: { conteudo: CONTEUDO_V2 },
+    });
+    expect(versao.statusCode).toBe(409);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+    expect(pedido.statusCode).toBe(409);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aprovado");
+    expect(atual.pedidoAlteracao).toBeNull();
+    expect(atual.versoes).toEqual([
+      {
+        numero: 1,
+        conteudo: CONTEUDO_V1,
+        criadaEm: INSTANTE_ANTES_DO_FIM,
+      },
+    ]);
+  });
+
+  it('critério: "Versão antiga não se perde quando chega uma nova."', async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+    expect(pedido.statusCode).toBe(201);
+
+    const novaVersao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/versoes`,
+      payload: { conteudo: CONTEUDO_V2 },
+    });
+    expect(novaVersao.statusCode).toBe(201);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.versoes).toEqual([
+      {
+        numero: 1,
+        conteudo: CONTEUDO_V1,
+        criadaEm: INSTANTE_ANTES_DO_FIM,
+      },
+      {
+        numero: 2,
+        conteudo: CONTEUDO_V2,
+        criadaEm: INSTANTE_ANTES_DO_FIM,
+      },
+    ]);
+  });
+
+  it('entrega: "Testes do prazo no último instante do dia"', async () => {
+    const instante = "2026-10-12T02:59:59.999Z";
+    const app = await abrirApp(instante);
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+
+    expect(pedido.statusCode).toBe(201);
+    expect((pedido.json() as Roteiro).status).toBe("alteracao_pedida");
+    expect((pedido.json() as Roteiro).pedidoAlteracao?.solicitadoEm).toBe(instante);
+  });
+
+  it('entrega: "Testes do prazo no primeiro instante do dia seguinte"', async () => {
+    const app = await abrirApp("2026-10-12T03:00:00.000Z");
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+
+    expect(pedido.statusCode).toBe(422);
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aguardando_marca");
+    expect(atual.pedidoAlteracao).toBeNull();
+  });
+
+  it('entrega: "Pedido de alteração com prazo que já passou não vale."', async () => {
+    const app = await abrirApp("2026-10-12T03:00:00.001Z");
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+
+    expect(pedido.statusCode).toBe(422);
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aguardando_marca");
+    expect(atual.pedidoAlteracao).toBeNull();
+    expect(atual.versoes).toHaveLength(1);
+  });
+
+  it('entrega: "Aprovar encerra a revisão, e a aprovação não reabre."', async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const primeira = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/aprovacao`,
+    });
+    expect(primeira.statusCode).toBe(200);
+    expect((primeira.json() as Roteiro).status).toBe("aprovado");
+
+    const segunda = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/aprovacao`,
+    });
+    expect(segunda.statusCode).toBe(409);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aprovado");
+  });
+
+  it("conteúdo vazio ou ausente na criação do roteiro responde 400", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+
+    const vazio = await app.inject({
+      method: "POST",
+      url: "/roteiros",
+      payload: { conteudo: "" },
+    });
+    expect(vazio.statusCode).toBe(400);
+
+    const ausente = await app.inject({
+      method: "POST",
+      url: "/roteiros",
+      payload: {},
+    });
+    expect(ausente.statusCode).toBe(400);
+  });
+
+  it("consultar roteiro inexistente responde 404", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const resposta = await app.inject({
+      method: "GET",
+      url: "/roteiros/inexistente",
+    });
+    expect(resposta.statusCode).toBe(404);
+  });
+
+  it("prazo que não é YYYY-MM-DD responde 400 e o estado não muda", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: "11/10/2026" },
+    });
+    expect(pedido.statusCode).toBe(400);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aguardando_marca");
+    expect(atual.pedidoAlteracao).toBeNull();
+  });
+
+  it("pedido de alteração em roteiro inexistente responde 404", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const resposta = await app.inject({
+      method: "POST",
+      url: "/roteiros/inexistente/pedidos-alteracao",
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+    expect(resposta.statusCode).toBe(404);
+  });
+
+  it("pedido de alteração com pedido já aberto responde 409", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const primeiro = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+    expect(primeiro.statusCode).toBe(201);
+
+    const segundo = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: "Outro motivo", prazo: PRAZO_NO_DIA },
+    });
+    expect(segundo.statusCode).toBe(409);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("alteracao_pedida");
+    expect(atual.pedidoAlteracao).toEqual({
+      motivo: MOTIVO,
+      prazo: PRAZO_NO_DIA,
+      solicitadoEm: INSTANTE_ANTES_DO_FIM,
+    });
+  });
+
+  it("nova versão com conteúdo vazio responde 400", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+    expect(pedido.statusCode).toBe(201);
+
+    const versao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/versoes`,
+      payload: { conteudo: "" },
+    });
+    expect(versao.statusCode).toBe(400);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("alteracao_pedida");
+    expect(atual.versoes).toHaveLength(1);
+  });
+
+  it("nova versão sem pedido de alteração aberto responde 409", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const versao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/versoes`,
+      payload: { conteudo: CONTEUDO_V2 },
+    });
+    expect(versao.statusCode).toBe(409);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aguardando_marca");
+    expect(atual.versoes).toHaveLength(1);
+    expect(atual.versoes[0]?.conteudo).toBe(CONTEUDO_V1);
+  });
+
+  it("aprovar no meio do pedido de alteração responde 409", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: PRAZO_NO_DIA },
+    });
+    expect(pedido.statusCode).toBe(201);
+
+    const aprovacao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/aprovacao`,
+    });
+    expect(aprovacao.statusCode).toBe(409);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("alteracao_pedida");
+    expect(atual.pedidoAlteracao).not.toBeNull();
+  });
+});
