@@ -4,7 +4,7 @@ API para a marca pedir alteração de um roteiro, com motivo e prazo, e para o c
 
 ## Como rodar
 
-Requer Node 22 ou superior.
+Requer Node 22.6 ou superior, porque o `npm start` usa `--experimental-strip-types`.
 
 ```bash
 npm install
@@ -40,7 +40,7 @@ curl -s -X POST http://localhost:3000/roteiros \
 }
 ```
 
-Pedir alteração. `prazo` é um dia `YYYY-MM-DD` no fuso da marca (`America/Sao_Paulo`). O último instante desse dia ainda vale.
+Pedir alteração. `prazo` é um dia `YYYY-MM-DD` no fuso da marca (`America/Sao_Paulo`). O último instante desse dia ainda vale. Os exemplos supõem o relógio em `2026-10-11T15:00:00Z`; com o relógio real, um prazo que já passou responde 422, então ao testar use uma data de hoje em diante.
 
 ```bash
 curl -s -X POST http://localhost:3000/roteiros/7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6f14/pedidos-alteracao \
@@ -127,7 +127,9 @@ Consultar o estado atual, incluindo todas as versões:
 curl -s http://localhost:3000/roteiros/7c1b9a2e-4f0d-4a6b-9c31-2e8d5a0b6f14
 ```
 
-Pedido sem motivo ou sem prazo responde 400. Prazo que já passou responde 422. Roteiro aprovado não aceita versão nova nem outro pedido de alteração (409).
+Criar, pedir alteração e enviar versão respondem 201. Aprovar e consultar respondem 200. Roteiro inexistente responde 404.
+
+Pedido sem motivo ou sem prazo responde 400. Prazo que já passou responde 422. Roteiro aprovado não aceita versão nova nem outro pedido de alteração (409). Quando mais de uma regra falha, a ordem é: formato da requisição (400), estado do roteiro (409), prazo (422).
 
 ## Estados
 
