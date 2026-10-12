@@ -309,6 +309,22 @@ describe("revisão de roteiro", () => {
     ]);
   });
 
+  it("roteiro aprovado com prazo já vencido responde 409, não 422", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    await app.inject({ method: "POST", url: `/roteiros/${roteiro.id}/aprovacao` });
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: "2026-10-10" },
+    });
+
+    expect(pedido.statusCode).toBe(409);
+    expect((await lerRoteiro(app, roteiro.id)).status).toBe("aprovado");
+  });
+
   it('critério: "Versão antiga não se perde quando chega uma nova."', async () => {
     const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
     const roteiro = await criarRoteiro(app);
