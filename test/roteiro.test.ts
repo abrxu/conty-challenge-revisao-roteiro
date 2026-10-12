@@ -252,6 +252,26 @@ describe("revisão de roteiro", () => {
     expect((await lerRoteiro(diaSeguinte, roteiroSeguinte.id)).pedidoAlteracao).toBeNull();
   });
 
+  it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou." com horário de verão', async () => {
+    // 2018-12-10T02:30Z é 10/12 às 00:30 em São Paulo (UTC-2). Um fuso fixo de -03:00 leria 09/12.
+    const app = await abrirApp("2018-12-10T02:30:00.000Z");
+    const roteiro = await criarRoteiro(app);
+
+    const deOntem = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: "2018-12-09" },
+    });
+    expect(deOntem.statusCode).toBe(422);
+
+    const deHoje = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: "2018-12-10" },
+    });
+    expect(deHoje.statusCode).toBe(201);
+  });
+
   it('critério: "O prazo no fuso da marca não vira o dia errado quando o horário UTC já virou."', async () => {
     const instante = "2026-10-12T02:00:00.000Z";
     const app = await abrirApp(instante);
@@ -474,6 +494,36 @@ describe("revisão de roteiro", () => {
     expect(atual.pedidoAlteracao).toBeNull();
   });
 
+  it('critério: "Pedido de alteração sem motivo ou sem prazo não passa." com data que não existe', async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    for (const prazo of ["2026-02-30", "2027-02-29", "2026-13-01", "2026-00-10", "2026-10-00"]) {
+      const pedido = await app.inject({
+        method: "POST",
+        url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+        payload: { motivo: MOTIVO, prazo },
+      });
+      expect(pedido.statusCode, prazo).toBe(400);
+    }
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aguardando_marca");
+    expect(atual.pedidoAlteracao).toBeNull();
+  });
+
+  it("29 de fevereiro de ano bissexto é um prazo válido", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: "2028-02-29" },
+    });
+    expect(pedido.statusCode).toBe(201);
+  });
+
   it("pedido de alteração em roteiro inexistente responde 404", async () => {
     const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
     const resposta = await app.inject({
@@ -549,6 +599,30 @@ describe("revisão de roteiro", () => {
     expect(atual.status).toBe("aguardando_marca");
     expect(atual.versoes).toHaveLength(1);
     expect(atual.versoes[0]?.conteudo).toBe(CONTEUDO_V1);
+  });
+
+  it("requisição mal formada responde 400 antes da checagem de estado", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/aprovacao`,
+    });
+
+    const versao = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/versoes`,
+      payload: { conteudo: "" },
+    });
+    expect(versao.statusCode).toBe(400);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: MOTIVO, prazo: "11/10/2026" },
+    });
+    expect(pedido.statusCode).toBe(400);
   });
 
   it("aprovar no meio do pedido de alteração responde 409", async () => {
