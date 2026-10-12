@@ -159,15 +159,15 @@ Guardaria cada pedido junto da versão que ele revisou, em vez de zerar `pedidoA
 
 ## Uso de IA
 
-**Usei o Cursor e o Claude Code para:**
+**Usei o Claude Code para:**
 
-1. <!-- PREENCHER: o que o Cursor fez na implementação inicial -->
-2. revisar a solução contra o `TASK.md` e propor melhorias, limpezas e o que faltava para fechar o desafio;
-3. comparar a solução com a documentação oficial do Fastify e do Node.js (mapeamento de erros, tipagem, validação por schema, encerramento gracioso);
-4. aplicar as melhorias com testes escritos antes de cada mudança (formato de erro, coerção de tipos, gerador de id injetado).
+1. revisar a solução contra a tarefa definida e propor: melhorias, limpezas conforme convenções e boas práticas da stack, e confirmar o que faltava para fechar o desafio (caso houvessem pontos faltantes);
+2. comparar a solução com a documentação oficial do Fastify e do Node.js (exception handling, tipagem, schema, graceful shutdown);
+3. aplicar as melhorias com testes escritos antes de cada mudança (formato de erro, coerção de tipos, gerador de id injetado).
 
 **Revisei pessoalmente:**
 
-1. <!-- PREENCHER: li a diff de cada arquivo e validei as mudanças -->
-2. <!-- PREENCHER: rodei `npm test` e `npm run typecheck` -->
-3. <!-- PREENCHER: testei a API localmente com os curls deste README -->
+1. li a diff de cada arquivo e validei as mudanças;
+2. validei as regras de negócio e o sentido delas com o desafio proposto;
+3. avaliei o contrato, a clareza e o escopo do desafio;
+4. realizei os testes necessários para garantir o funcionamento da aplicação/API.
