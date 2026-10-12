@@ -1,11 +1,35 @@
-import Fastify, { type FastifyError, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyError } from "fastify";
 import type { Clock } from "./clock.ts";
 import { ErroDeRoteiro, type CodigoErro } from "./domain/erros.ts";
 import { ServicoRoteiro, type RepositorioRoteiros } from "./domain/roteiro.ts";
 import { RepositorioMemoria } from "./repositorio-memoria.ts";
 
+type ComId = { Params: { id: string } };
+
+const params = {
+  type: "object",
+  required: ["id"],
+  properties: { id: { type: "string" } },
+} as const;
+
+const corpoConteudo = {
+  type: "object",
+  required: ["conteudo"],
+  properties: { conteudo: { type: "string" } },
+} as const;
+
+const corpoPedido = {
+  type: "object",
+  required: ["motivo", "prazo"],
+  properties: {
+    motivo: { type: "string" },
+    prazo: { type: "string", format: "date" },
+  },
+} as const;
+
 export async function buildApp(deps: { clock: Clock; repositorio?: RepositorioRoteiros }) {
-  const app = Fastify({ logger: false });
+  // Sem coerção: o default do Fastify transformaria {"conteudo": 123} em "123".
+  const app = Fastify({ logger: false, ajv: { customOptions: { coerceTypes: false } } });
   const servico = new ServicoRoteiro(deps.repositorio ?? new RepositorioMemoria(), deps.clock);
 
   app.setErrorHandler<FastifyError>((erro, _request, reply) => {
@@ -20,45 +44,42 @@ export async function buildApp(deps: { clock: Clock; repositorio?: RepositorioRo
     return reply.code(500).send({ erro: "Erro interno." });
   });
 
-  app.post("/roteiros", async (request, reply) => {
-    const roteiro = servico.criar(campo(request, "conteudo"));
-    return reply.code(201).send(roteiro);
+  app.post<{ Body: { conteudo: string } }>(
+    "/roteiros",
+    { schema: { body: corpoConteudo } },
+    async (request, reply) => {
+      const roteiro = servico.criar(request.body.conteudo);
+      return reply.code(201).send(roteiro);
+    },
+  );
+
+  app.get<ComId>("/roteiros/:id", { schema: { params } }, async (request) => {
+    return servico.buscar(request.params.id);
   });
 
-  app.get("/roteiros/:id", async (request) => {
-    return servico.buscar(idDe(request));
-  });
+  app.post<ComId & { Body: { motivo: string; prazo: string } }>(
+    "/roteiros/:id/pedidos-alteracao",
+    { schema: { params, body: corpoPedido } },
+    async (request, reply) => {
+      const roteiro = servico.pedirAlteracao(request.params.id, request.body);
+      return reply.code(201).send(roteiro);
+    },
+  );
 
-  app.post("/roteiros/:id/pedidos-alteracao", async (request, reply) => {
-    const roteiro = servico.pedirAlteracao(idDe(request), {
-      motivo: campo(request, "motivo"),
-      prazo: campo(request, "prazo"),
-    });
-    return reply.code(201).send(roteiro);
-  });
+  app.post<ComId & { Body: { conteudo: string } }>(
+    "/roteiros/:id/versoes",
+    { schema: { params, body: corpoConteudo } },
+    async (request, reply) => {
+      const roteiro = servico.enviarVersao(request.params.id, request.body.conteudo);
+      return reply.code(201).send(roteiro);
+    },
+  );
 
-  app.post("/roteiros/:id/versoes", async (request, reply) => {
-    const roteiro = servico.enviarVersao(idDe(request), campo(request, "conteudo"));
-    return reply.code(201).send(roteiro);
-  });
-
-  app.post("/roteiros/:id/aprovacao", async (request) => {
-    return servico.aprovar(idDe(request));
+  app.post<ComId>("/roteiros/:id/aprovacao", { schema: { params } }, async (request) => {
+    return servico.aprovar(request.params.id);
   });
 
   return app;
-}
-
-function idDe(request: FastifyRequest): string {
-  const params = request.params as { id?: string };
-  return params.id ?? "";
-}
-
-function campo(request: FastifyRequest, nome: string): unknown {
-  if (!request.body || typeof request.body !== "object" || Array.isArray(request.body)) {
-    return undefined;
-  }
-  return (request.body as Record<string, unknown>)[nome];
 }
 
 function statusDe(codigo: CodigoErro): number {

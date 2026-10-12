@@ -1,6 +1,6 @@
 import type { Clock } from "../clock.ts";
 import { ErroDeRoteiro } from "./erros.ts";
-import { prazoAindaVale, prazoCalendario } from "./prazo.ts";
+import { prazoAindaVale } from "./prazo.ts";
 
 export type StatusRoteiro = "aguardando_marca" | "alteracao_pedida" | "aprovado";
 
@@ -23,7 +23,7 @@ export type Roteiro = {
   pedidoAlteracao: PedidoAlteracao | null;
 };
 
-export function criarRoteiro(id: string, conteudo: unknown, agora: Date): Roteiro {
+export function criarRoteiro(id: string, conteudo: string, agora: Date): Roteiro {
   return {
     id,
     status: "aguardando_marca",
@@ -34,11 +34,11 @@ export function criarRoteiro(id: string, conteudo: unknown, agora: Date): Roteir
 
 export function pedirAlteracao(
   roteiro: Roteiro,
-  entrada: { motivo: unknown; prazo: unknown },
+  entrada: { motivo: string; prazo: string },
   agora: Date,
 ): Roteiro {
   const motivo = textoObrigatorio(entrada.motivo, "Informe o motivo da alteração.");
-  const prazo = prazoCalendario(entrada.prazo);
+  const prazo = entrada.prazo;
 
   if (roteiro.status !== "aguardando_marca") {
     throw new ErroDeRoteiro(
@@ -63,7 +63,7 @@ export function pedirAlteracao(
   };
 }
 
-export function enviarVersao(roteiro: Roteiro, conteudo: unknown, agora: Date): Roteiro {
+export function enviarVersao(roteiro: Roteiro, conteudo: string, agora: Date): Roteiro {
   const texto = textoObrigatorio(conteudo, "Informe o conteúdo da versão.");
 
   if (roteiro.status !== "alteracao_pedida") {
@@ -108,7 +108,7 @@ export function aprovar(roteiro: Roteiro): Roteiro {
   }
 }
 
-function montarVersao(numero: number, conteudo: unknown, agora: Date): Versao {
+function montarVersao(numero: number, conteudo: string, agora: Date): Versao {
   return {
     numero,
     conteudo: textoObrigatorio(conteudo, "Informe o conteúdo do roteiro."),
@@ -116,8 +116,8 @@ function montarVersao(numero: number, conteudo: unknown, agora: Date): Versao {
   };
 }
 
-function textoObrigatorio(valor: unknown, mensagem: string): string {
-  if (typeof valor !== "string" || valor.trim() === "") {
+function textoObrigatorio(valor: string, mensagem: string): string {
+  if (valor.trim() === "") {
     throw new ErroDeRoteiro("requisicao_invalida", mensagem);
   }
   return valor.trim();
@@ -141,7 +141,7 @@ export class ServicoRoteiro {
     this.clock = clock;
   }
 
-  criar(conteudo: unknown): Roteiro {
+  criar(conteudo: string): Roteiro {
     const roteiro = criarRoteiro(crypto.randomUUID(), conteudo, this.clock.now());
     this.repositorio.salvar(roteiro);
     return roteiro;
@@ -151,14 +151,14 @@ export class ServicoRoteiro {
     return this.exigir(id);
   }
 
-  pedirAlteracao(id: string, entrada: { motivo: unknown; prazo: unknown }): Roteiro {
+  pedirAlteracao(id: string, entrada: { motivo: string; prazo: string }): Roteiro {
     const atual = this.exigir(id);
     const revisado = pedirAlteracao(atual, entrada, this.clock.now());
     this.repositorio.salvar(revisado);
     return revisado;
   }
 
-  enviarVersao(id: string, conteudo: unknown): Roteiro {
+  enviarVersao(id: string, conteudo: string): Roteiro {
     const atual = this.exigir(id);
     const revisado = enviarVersao(atual, conteudo, this.clock.now());
     this.repositorio.salvar(revisado);

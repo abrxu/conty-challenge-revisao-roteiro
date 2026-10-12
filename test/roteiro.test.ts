@@ -684,4 +684,44 @@ describe("revisão de roteiro", () => {
     expect(resposta.statusCode).toBe(500);
     expect(resposta.json()).toEqual({ erro: "Erro interno." });
   });
+
+  it("campos que não são texto respondem 400 em vez de virar string", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+
+    const criacao = await app.inject({
+      method: "POST",
+      url: "/roteiros",
+      payload: { conteudo: 123 },
+    });
+    expect(criacao.statusCode).toBe(400);
+
+    const roteiro = await criarRoteiro(app);
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: 42, prazo: PRAZO_NO_DIA },
+    });
+    expect(pedido.statusCode).toBe(400);
+
+    const semCorpo = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+    });
+    expect(semCorpo.statusCode).toBe(400);
+
+    const atual = await lerRoteiro(app, roteiro.id);
+    expect(atual.status).toBe("aguardando_marca");
+  });
+
+  it("motivo só com espaços não conta como motivo", async () => {
+    const app = await abrirApp(INSTANTE_ANTES_DO_FIM);
+    const roteiro = await criarRoteiro(app);
+
+    const pedido = await app.inject({
+      method: "POST",
+      url: `/roteiros/${roteiro.id}/pedidos-alteracao`,
+      payload: { motivo: "   ", prazo: PRAZO_NO_DIA },
+    });
+    expect(pedido.statusCode).toBe(400);
+  });
 });
