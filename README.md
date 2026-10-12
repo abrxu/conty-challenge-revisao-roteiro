@@ -139,7 +139,7 @@ Pedido sem motivo ou sem prazo responde 400. Prazo que já passou responde 422. 
 
 ## Decisões
 
-- O prazo é um dia civil em `America/Sao_Paulo`. O pedido vale quando a data local nesse fuso ainda é o dia do prazo. Em um dia comum, 23:59:59.999 passa e 00:00:00.000 do dia seguinte não passa. Se o relógio adianta ou atrasa, vale o dia que o fuso mostra, e não a data em UTC.
+- O prazo é um dia civil em `America/Sao_Paulo`. O pedido vale quando a data local nesse fuso ainda é o dia do prazo. Em um dia comum, 23:59:59.999 ainda vale e 00:00:00.000 do dia seguinte já não vale. Se o relógio adianta ou atrasa, vale o dia que o fuso mostra, e não a data em UTC.
 - O prazo trava só o pedido de alteração. Com o pedido já aberto, a versão nova entra mesmo depois desse dia.
 - O relógio entra por injeção (`Clock`). O domínio não chama `Date.now()`.
 - Cada resposta devolve o roteiro inteiro (`status`, `versoes`, `pedidoAlteracao`) para o próximo passo não depender de memória de chat.
